@@ -13,14 +13,8 @@ gi.require_version("Gtk", "3.0")
 import dbus
 import dbus.service
 import logging
-import os
-import re
 import subprocess
-import sys
 import time
-import threading
-from dbus.mainloop.glib import DBusGMainLoop
-from gi.repository import Gio, GLib, Gtk, Gdk, GObject
 from Xlib import display, protocol, X, Xatom, error
 from collections import OrderedDict
 
@@ -63,22 +57,6 @@ class EWMH:
         atom = win.get_full_property(self.display.get_atom(_type), X.AnyPropertyType)
         if atom:
             return atom.value
-    
-    def _setProperty(self, _type, data, win=None, mask=None):
-        # Send a ClientMessage event to the root window
-        if not win:
-            win = self.root
-        if type(data) is str:
-            dataSize = 8
-        else:
-            data = (data+[0]*(5-len(data)))[:5]
-            dataSize = 32
-            
-        ev = protocol.event.ClientMessage(window=win, client_type=self.display.get_atom(_type), data=(dataSize, data))
-
-        if not mask:
-            mask = (X.SubstructureRedirectMask|X.SubstructureNotifyMask)
-        self.root.send_event(ev, event_mask=mask)
     
     def _createWindow(self, wId):
         if not wId:
@@ -199,6 +177,7 @@ def try_dbusmenu_interface(window_id):
     # Access dbusmenu items
     try:
         dbusmenu_object = session_bus.get_object(dbusmenu_bus, dbusmenu_object_path)
+        logging.debug(dbusmenu_bus)
         dbusmenu_object_iface = dbus.Interface(dbusmenu_object, 'com.canonical.dbusmenu')
     except ValueError:
         logging.info('Unable to access dbusmenu items.')
@@ -209,7 +188,7 @@ def try_dbusmenu_interface(window_id):
 
     def get_layout(parent_id = 0, recursion_depth = -1, property_names = ["label", "children-display"]):
         # Returns a layout as a list of items. Each item is an array of [item_id, item_props, item_children].
-        revision, layout = dbusmenu_object_iface.GetLayout(parent_id, recursion_depth, property_names)
+        _, layout = dbusmenu_object_iface.GetLayout(parent_id, recursion_depth, property_names)
         return layout    
 
     dbusmenu_root_item = get_layout()
@@ -251,7 +230,7 @@ def try_dbusmenu_interface(window_id):
 
             blacklist.append(new_path)
 
-            logging.debug('get_layout.child : %s', str(time.perf_counter()))
+            #logging.debug('get_layout.child : %s', str(time.perf_counter()))
 
             # if not rofi_process and rofi_process.poll() is not None:
             #     logging.debug("explore_dbus_menu(child) rofi_process was terminated before child menuitems were piped")
@@ -430,14 +409,14 @@ def main():
         else:
             return value
 
-    window_pid = get_prop_str('_NET_WM_PID')
+#    window_pid = get_prop_str('_NET_WM_PID')
     gtk_bus_name = get_prop_str('_GTK_UNIQUE_BUS_NAME')
     gtk_menubar_object_path = get_prop_str('_GTK_MENUBAR_OBJECT_PATH')
     gtk_app_object_path = get_prop_str('_GTK_APPLICATION_OBJECT_PATH')
     gtk_win_object_path = get_prop_str('_GTK_WINDOW_OBJECT_PATH')
     gtk_unity_object_path = get_prop_str('_UNITY_OBJECT_PATH')
 
-    logging.debug('Window id is : %s', window_id)
+    logging.debug('Window id is : %s', int(window_id, 16))
     logging.debug('_GTK_UNIQUE_BUS_NAME: %s', gtk_bus_name)
     logging.debug('_GTK_MENUBAR_OBJECT_PATH: %s', gtk_menubar_object_path)
     logging.debug('_GTK_APPLICATION_OBJECT_PATH: %s', gtk_app_object_path)
@@ -454,5 +433,5 @@ def main():
         try_gtk_interface(gtk_bus_name, gtk_menubar_object_path, gtk_actions_paths_list)
 
 if __name__ == '__main__':
-    #logging.basicConfig(filename="hud.log", level=logging.DEBUG)
+    logging.basicConfig(filename="hud.log", level=logging.DEBUG)
     main()
